@@ -1,51 +1,50 @@
 import * as anchor from "@coral-xyz/anchor"
 import { AnchorProgramExample } from "../target/types/anchor_program_example"
-import { Keypair } from "@solana/web3.js"
+import {
+  Keypair,
+  SystemProgram,
+  Transaction,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js"
 
-describe("Account Data!", () => {
+describe("Anchor example", () => {
   const provider = anchor.AnchorProvider.env()
   anchor.setProvider(provider)
-  const payer = provider.wallet as anchor.Wallet
   const program = anchor.workspace
     .AnchorProgramExample as anchor.Program<AnchorProgramExample>
+  const wallet = provider.wallet as anchor.Wallet
 
-  // Generate a new keypair for the addressInfo account
-  const addressInfoAccount = new Keypair()
+  // We'll create this ahead of time.
+  // Our program will try to modify it.
+  const accountToChange = new Keypair()
+  // Our program will create this.
+  const accountToCreate = new Keypair()
 
-  it("Create the address info account", async () => {
-    console.log(`Payer Address      : ${payer.publicKey}`)
-    console.log(`Address Info Acct  : ${addressInfoAccount.publicKey}`)
+  it("Create an account owned by our program", async () => {
+    let instruction = SystemProgram.createAccount({
+      fromPubkey: provider.wallet.publicKey,
+      newAccountPubkey: accountToChange.publicKey,
+      lamports: await provider.connection.getMinimumBalanceForRentExemption(0),
+      space: 0,
+      programId: program.programId, // Our program
+    })
 
-    // Instruction data
-    const addressInfo = {
-      name: "Joe C",
-      houseNumber: 136,
-      street: "Mile High Dr.",
-      city: "Solana Beach",
-    }
+    const transaction = new Transaction().add(instruction)
 
-    await program.methods
-      .createAddressInfo(
-        addressInfo.name,
-        addressInfo.houseNumber,
-        addressInfo.street,
-        addressInfo.city
-      )
-      .accounts({
-        addressInfo: addressInfoAccount.publicKey,
-        payer: payer.publicKey,
-      })
-      .signers([addressInfoAccount])
-      .rpc()
+    await sendAndConfirmTransaction(provider.connection, transaction, [
+      wallet.payer,
+      accountToChange,
+    ])
   })
 
-  it("Read the new account's data", async () => {
-    const addressInfo = await program.account.addressInfo.fetch(
-      addressInfoAccount.publicKey
-    )
-    console.log(`Name     : ${addressInfo.name}`)
-    console.log(`House Num: ${addressInfo.houseNumber}`)
-    console.log(`Street   : ${addressInfo.street}`)
-    console.log(`City     : ${addressInfo.city}`)
+  it("Check accounts", async () => {
+    await program.methods
+      .checkAccounts()
+      .accounts({
+        payer: wallet.publicKey,
+        accountToCreate: accountToCreate.publicKey,
+        accountToChange: accountToChange.publicKey,
+      })
+      .rpc()
   })
 })

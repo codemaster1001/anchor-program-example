@@ -1,8 +1,6 @@
-use anchor_lang::prelude::*;
-use instructions::*;
+#![allow(clippy::result_large_err)]
 
-pub mod instructions;
-pub mod state;
+use anchor_lang::prelude::*;
 
 declare_id!("FhjBVpnwE8R6wBLS1X2YEfTXzjednen5MDFUDoeoiJG7");
 
@@ -10,13 +8,25 @@ declare_id!("FhjBVpnwE8R6wBLS1X2YEfTXzjednen5MDFUDoeoiJG7");
 pub mod anchor_program_example {
     use super::*;
 
-    pub fn create_address_info(
-        ctx: Context<CreateAddressInfo>,
-        name: String,
-        house_number: u8,
-        street: String,
-        city: String,
-    ) -> Result<()> {
-        create::create_address_info(ctx, name, house_number, street, city)
+    pub fn check_accounts(_ctx: Context<CheckingAccounts>) -> Result<()> {
+        Ok(())
     }
+}
+
+// Account validation in Anchor is done using the types and constraints specified in the #[derive(Accounts)] structs
+// This is a simple example and does not include all possible constraints and types
+#[derive(Accounts)]
+pub struct CheckingAccounts<'info> {
+    payer: Signer<'info>, // checks account is signer
+
+    /// CHECK: No checks performed, example of an unchecked account
+    #[account(mut)]
+    account_to_create: UncheckedAccount<'info>,
+    /// CHECK: Perform owner check using constraint
+    #[account(
+        mut,
+        owner = id()
+    )]
+    account_to_change: UncheckedAccount<'info>,
+    system_program: Program<'info, System>, // checks account is executable, and is the system program
 }
