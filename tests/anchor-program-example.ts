@@ -1,50 +1,52 @@
 import * as anchor from "@coral-xyz/anchor"
 import { AnchorProgramExample } from "../target/types/anchor_program_example"
-import {
-  Keypair,
-  SystemProgram,
-  Transaction,
-  sendAndConfirmTransaction,
-} from "@solana/web3.js"
+import { Program } from "@coral-xyz/anchor"
+import { PublicKey } from "@solana/web3.js"
+import assert from "assert"
 
-describe("Anchor example", () => {
+describe("close-an-account", () => {
+  // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env()
   anchor.setProvider(provider)
+
   const program = anchor.workspace
-    .AnchorProgramExample as anchor.Program<AnchorProgramExample>
-  const wallet = provider.wallet as anchor.Wallet
+    .AnchorProgramExample as Program<AnchorProgramExample>
+  const payer = provider.wallet as anchor.Wallet
 
-  // We'll create this ahead of time.
-  // Our program will try to modify it.
-  const accountToChange = new Keypair()
-  // Our program will create this.
-  const accountToCreate = new Keypair()
+  // Derive the PDA for the user's account.
+  const [userAccountAddress] = PublicKey.findProgramAddressSync(
+    [Buffer.from("USER"), payer.publicKey.toBuffer()],
+    program.programId
+  )
 
-  it("Create an account owned by our program", async () => {
-    let instruction = SystemProgram.createAccount({
-      fromPubkey: provider.wallet.publicKey,
-      newAccountPubkey: accountToChange.publicKey,
-      lamports: await provider.connection.getMinimumBalanceForRentExemption(0),
-      space: 0,
-      programId: program.programId, // Our program
-    })
-
-    const transaction = new Transaction().add(instruction)
-
-    await sendAndConfirmTransaction(provider.connection, transaction, [
-      wallet.payer,
-      accountToChange,
-    ])
-  })
-
-  it("Check accounts", async () => {
+  it("Create Account", async () => {
     await program.methods
-      .checkAccounts()
+      .createUser("John Doe")
       .accounts({
-        payer: wallet.publicKey,
-        accountToCreate: accountToCreate.publicKey,
-        accountToChange: accountToChange.publicKey,
+        user: payer.publicKey,
       })
       .rpc()
+
+    // Fetch the account data
+    const userAccount = await program.account.userState.fetch(
+      userAccountAddress
+    )
+    assert.equal(userAccount.name, "John Doe")
+    assert.equal(userAccount.user.toBase58(), payer.publicKey.toBase58())
+  })
+
+  it("Close Account", async () => {
+    await program.methods
+      .closeUser()
+      .accounts({
+        user: payer.publicKey,
+      })
+      .rpc()
+
+    // The account should no longer exist, returning null.
+    const userAccount = await program.account.userState.fetchNullable(
+      userAccountAddress
+    )
+    assert.equal(userAccount, null)
   })
 })
