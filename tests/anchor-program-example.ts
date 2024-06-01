@@ -1,63 +1,35 @@
 import * as anchor from "@coral-xyz/anchor"
-import { CounterAnchor } from "../target/types/counter_anchor"
-import { Program } from "@coral-xyz/anchor"
-import { Keypair } from "@solana/web3.js"
+import { CreateSystemAccount } from "../target/types/create_system_account"
+import { Keypair, SystemProgram } from "@solana/web3.js"
 import { assert } from "chai"
 
-describe("counter_anchor", () => {
-  // Configure the client to use the local cluster.
+describe("Create a system account", () => {
   const provider = anchor.AnchorProvider.env()
   anchor.setProvider(provider)
-  const payer = provider.wallet as anchor.Wallet
+  const wallet = provider.wallet as anchor.Wallet
+  const connection = provider.connection
+  const program = anchor.workspace
+    .CreateSystemAccount as anchor.Program<CreateSystemAccount>
 
-  const program = anchor.workspace.CounterAnchor as Program<CounterAnchor>
+  it("Create the account", async () => {
+    // Generate a new keypair for the new account
+    const newKeypair = new Keypair()
 
-  // Generate a new keypair for the counter account
-  const counterKeypair = new Keypair()
-
-  it("Initialize Counter", async () => {
     await program.methods
-      .initializeCounter()
+      .createSystemAccount()
       .accounts({
-        counter: counterKeypair.publicKey,
-        payer: payer.publicKey,
+        payer: wallet.publicKey,
+        newAccount: newKeypair.publicKey,
       })
-      .signers([counterKeypair])
+      .signers([newKeypair])
       .rpc()
 
-    const currentCount = await program.account.counter.fetch(
-      counterKeypair.publicKey
-    )
+    // Minimum balance for rent exemption for new account
+    const lamports = await connection.getMinimumBalanceForRentExemption(0)
 
-    assert(
-      currentCount.count.toNumber() === 0,
-      "Expected initialized count to be 0"
-    )
-  })
-
-  it("Increment Counter", async () => {
-    await program.methods
-      .increment()
-      .accounts({ counter: counterKeypair.publicKey })
-      .rpc()
-
-    const currentCount = await program.account.counter.fetch(
-      counterKeypair.publicKey
-    )
-
-    assert(currentCount.count.toNumber() === 1, "Expected  count to be 1")
-  })
-
-  it("Increment Counter Again", async () => {
-    await program.methods
-      .increment()
-      .accounts({ counter: counterKeypair.publicKey })
-      .rpc()
-
-    const currentCount = await program.account.counter.fetch(
-      counterKeypair.publicKey
-    )
-
-    assert(currentCount.count.toNumber() === 2, "Expected  count to be 2")
+    // Check that the account was created
+    const accountInfo = await connection.getAccountInfo(newKeypair.publicKey)
+    assert((accountInfo.owner = SystemProgram.programId))
+    assert(accountInfo.lamports === lamports)
   })
 })

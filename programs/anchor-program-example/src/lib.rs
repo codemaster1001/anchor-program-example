@@ -1,45 +1,47 @@
 #![allow(clippy::result_large_err)]
 
 use anchor_lang::prelude::*;
-
+use anchor_lang::system_program::{create_account, CreateAccount};
 declare_id!("FhjBVpnwE8R6wBLS1X2YEfTXzjednen5MDFUDoeoiJG7");
 
+
 #[program]
-pub mod counter_anchor {
+pub mod create_system_account {
     use super::*;
 
-    pub fn initialize_counter(_ctx: Context<InitializeCounter>) -> Result<()> {
-        Ok(())
-    }
+    pub fn create_system_account(ctx: Context<CreateSystemAccount>) -> Result<()> {
+        msg!("Program invoked. Creating a system account...");
+        msg!(
+            "  New public key will be: {}",
+            &ctx.accounts.new_account.key().to_string()
+        );
 
-    pub fn increment(ctx: Context<Increment>) -> Result<()> {
-        ctx.accounts.counter.count = ctx.accounts.counter.count.checked_add(1).unwrap();
+        // The minimum lamports for rent exemption
+        let lamports = (Rent::get()?).minimum_balance(0);
+
+        create_account(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                CreateAccount {
+                    from: ctx.accounts.payer.to_account_info(), // From pubkey
+                    to: ctx.accounts.new_account.to_account_info(), // To pubkey
+                },
+            ),
+            lamports,                           // Lamports
+            0,                                  // Space
+            &ctx.accounts.system_program.key(), // Owner Program
+        )?;
+
+        msg!("Account created succesfully.");
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-pub struct InitializeCounter<'info> {
+pub struct CreateSystemAccount<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-
-    #[account(
-        init,
-        space = 8 + Counter::INIT_SPACE,
-        payer = payer
-    )]
-    pub counter: Account<'info, Counter>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct Increment<'info> {
     #[account(mut)]
-    pub counter: Account<'info, Counter>,
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct Counter {
-    count: u64,
+    pub new_account: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
