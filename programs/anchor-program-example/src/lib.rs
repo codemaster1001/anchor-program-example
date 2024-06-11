@@ -1,47 +1,31 @@
 #![allow(clippy::result_large_err)]
 
 use anchor_lang::prelude::*;
-use anchor_lang::system_program::{create_account, CreateAccount};
 declare_id!("FhjBVpnwE8R6wBLS1X2YEfTXzjednen5MDFUDoeoiJG7");
 
-
 #[program]
-pub mod create_system_account {
+pub mod anchor_program_example {
     use super::*;
 
-    pub fn create_system_account(ctx: Context<CreateSystemAccount>) -> Result<()> {
-        msg!("Program invoked. Creating a system account...");
-        msg!(
-            "  New public key will be: {}",
-            &ctx.accounts.new_account.key().to_string()
-        );
-
-        // The minimum lamports for rent exemption
-        let lamports = (Rent::get()?).minimum_balance(0);
-
-        create_account(
-            CpiContext::new(
-                ctx.accounts.system_program.to_account_info(),
-                CreateAccount {
-                    from: ctx.accounts.payer.to_account_info(), // From pubkey
-                    to: ctx.accounts.new_account.to_account_info(), // To pubkey
-                },
-            ),
-            lamports,                           // Lamports
-            0,                                  // Space
-            &ctx.accounts.system_program.key(), // Owner Program
-        )?;
-
-        msg!("Account created succesfully.");
+    pub fn check_accounts(_ctx: Context<CheckingAccounts>) -> Result<()> {
         Ok(())
     }
 }
 
+// Account validation in Anchor is done using the types and constraints specified in the #[derive(Accounts)] structs
+// This is a simple example and does not include all possible constraints and types
 #[derive(Accounts)]
-pub struct CreateSystemAccount<'info> {
+pub struct CheckingAccounts<'info> {
+    payer: Signer<'info>, // checks account is signer
+
+    /// CHECK: No checks performed, example of an unchecked account
     #[account(mut)]
-    pub payer: Signer<'info>,
-    #[account(mut)]
-    pub new_account: Signer<'info>,
-    pub system_program: Program<'info, System>,
+    account_to_create: UncheckedAccount<'info>,
+    /// CHECK: Perform owner check using constraint
+    #[account(
+        mut,
+        owner = id()
+    )]
+    account_to_change: UncheckedAccount<'info>,
+    system_program: Program<'info, System>, // checks account is executable, and is the system program
 }

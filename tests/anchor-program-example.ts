@@ -1,35 +1,52 @@
 import * as anchor from "@coral-xyz/anchor"
-import { CreateSystemAccount } from "../target/types/create_system_account"
-import { Keypair, SystemProgram } from "@solana/web3.js"
+import { AnchorProgramExample } from "../target/types/anchor_program_example
 import { assert } from "chai"
+import {
+  Keypair,
+  SystemProgram,
+  Transaction,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js"
 
-describe("Create a system account", () => {
+
+describe("Anchor example", () => {
   const provider = anchor.AnchorProvider.env()
   anchor.setProvider(provider)
-  const wallet = provider.wallet as anchor.Wallet
-  const connection = provider.connection
   const program = anchor.workspace
-    .CreateSystemAccount as anchor.Program<CreateSystemAccount>
+    .AnchorProgramExample as anchor.Program<AnchorProgramExample>
+  const wallet = provider.wallet as anchor.Wallet
 
-  it("Create the account", async () => {
-    // Generate a new keypair for the new account
-    const newKeypair = new Keypair()
+  // We'll create this ahead of time.
+  // Our program will try to modify it.
+  const accountToChange = new Keypair()
+  // Our program will create this.
+  const accountToCreate = new Keypair()
 
+  it("Create an account owned by our program", async () => {
+    let instruction = SystemProgram.createAccount({
+      fromPubkey: provider.wallet.publicKey,
+      newAccountPubkey: accountToChange.publicKey,
+      lamports: await provider.connection.getMinimumBalanceForRentExemption(0),
+      space: 0,
+      programId: program.programId, // Our program
+    })
+
+    const transaction = new Transaction().add(instruction)
+
+    await sendAndConfirmTransaction(provider.connection, transaction, [
+      wallet.payer,
+      accountToChange,
+    ])
+  })
+
+  it("Check accounts", async () => {
     await program.methods
-      .createSystemAccount()
+      .checkAccounts()
       .accounts({
         payer: wallet.publicKey,
-        newAccount: newKeypair.publicKey,
+        accountToCreate: accountToCreate.publicKey,
+        accountToChange: accountToChange.publicKey,
       })
-      .signers([newKeypair])
       .rpc()
-
-    // Minimum balance for rent exemption for new account
-    const lamports = await connection.getMinimumBalanceForRentExemption(0)
-
-    // Check that the account was created
-    const accountInfo = await connection.getAccountInfo(newKeypair.publicKey)
-    assert((accountInfo.owner = SystemProgram.programId))
-    assert(accountInfo.lamports === lamports)
   })
 })
